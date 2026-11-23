@@ -1,0 +1,7 @@
+[Unit]
+Description=Server health check (monitor.sh)
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/server-monitor.env
+ExecStart=/usr/local/bin/monitor.sh

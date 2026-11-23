@@ -1,0 +1,32 @@
+groups:
+  - name: server-health
+    rules:
+      - alert: ExporterDown
+        expr: up{job="server"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Metrics exporter on {{ $labels.instance }} is down"
+      - alert: HighCpuUsage
+        expr: server_cpu_usage_percent > 85
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "CPU above 85% for 5 minutes on {{ $labels.host }}"
+      - alert: HighMemoryUsage
+        expr: server_memory_usage_percent > 90
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Memory above 90% on {{ $labels.host }}"
+      - alert: DiskAlmostFull
+        expr: server_disk_usage_percent > 85
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "Disk {{ $labels.mount }} above 85% on {{ $labels.host }}"
+      - alert: HostRebooted
+        expr: server_uptime_seconds < 600
+        labels: {severity: info}
+        annotations:
+          summary: "{{ $labels.host }} rebooted in the last 10 minutes"
