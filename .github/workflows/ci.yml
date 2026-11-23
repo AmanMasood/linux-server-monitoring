@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: shellcheck -S warning scripts/*.sh tests/*.sh
+      - name: monitor.sh tests
+        run: bash tests/test_monitor.sh
+
+  exporter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r exporter/requirements.txt pytest
+      - run: python -m pytest -q tests
+
+  stack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Prometheus config and alert rules
+        run: |
+          docker run --rm -v "$PWD/prometheus:/cfg" --entrypoint promtool prom/prometheus:v2.54.1 check rules /cfg/alerts.yml
+      - name: Start monitoring stack
+        run: docker compose up -d --build
+      - name: Exporter serves metrics
+        run: |
+          for i in $(seq 1 20); do curl -fsS localhost:9200/metrics | grep -q server_cpu_usage_percent && break; sleep 3; done
+          curl -fsS localhost:9200/metrics | head -20
+      - name: Prometheus scrapes the exporter
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS 'localhost:9090/api/v1/query?query=up%7Bjob%3D%22server%22%7D' | grep -q '"value":\[[0-9.]*,"1"\]'; then echo "target up"; exit 0; fi
+            sleep 3
+          done
+          echo "target never came up"; exit 1
+      - name: Grafana is healthy
+        run: |
+          for i in $(seq 1 20); do curl -fsS localhost:3000/api/health && exit 0; sleep 3; done; exit 1
+      - if: failure()
+        run: docker compose logs
